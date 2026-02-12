@@ -1,0 +1,245 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Hotel {
+  id              String      @id @default(cuid())
+  name            String
+  country         String      @default("Kenya")
+  county          String?
+  town            String?
+  efficiencyScore Float       @default(100)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  users           User[]
+  stockItems      StockItem[]
+  subscription    Subscription?
+  auditLogs       AuditLog[]
+  recipes         Recipe[]
+  suppliers       Supplier[]
+  wasteLogs       WasteLog[]
+  dailySales      DailySale[]
+  purchaseOrders  PurchaseOrder[]
+  shiftLogs       ShiftLog[]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("KITCHEN") // OWNER, MANAGER, KITCHEN
+  hotelId       String?
+  hotel         Hotel?     @relation(fields: [hotelId], references: [id])
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  hotelId   String   @unique
+  hotel     Hotel    @relation(fields: [hotelId], references: [id])
+  type      String   @default("FREE") // FREE, PREMIUM
+  startDate DateTime @default(now())
+  endDate   DateTime?
+}
+
+model StockItem {
+  id            String      @id @default(cuid())
+  name          String
+  unit          String      // kg, litres, count, etc.
+  buyingPrice   Float       @default(0)
+  minimumLevel  Float       @default(0)
+  reorderLevel  Float       @default(0)
+  hotelId       String
+  hotel         Hotel       @relation(fields: [hotelId], references: [id])
+  entries       StockEntry[]
+  usages        StockUsage[]
+  ingredients   RecipeIngredient[]
+  wasteLogs     WasteLog[]
+  poItems       POItem[]
+  createdAt     DateTime    @default(now())
+}
+
+model StockEntry {
+  id          String    @id @default(cuid())
+  itemId      String
+  item        StockItem @relation(fields: [itemId], references: [id])
+  quantity    Float
+  unitPrice   Float     @default(0)
+  supplier    String?
+  supplierId  String?
+  supplierRef Supplier? @relation(fields: [supplierId], references: [id])
+  receiptUrl  String?
+  expiryDate  DateTime?
+  hotelId     String
+  addedBy     String
+  createdAt   DateTime  @default(now())
+}
+
+model StockUsage {
+  id          String    @id @default(cuid())
+  itemId      String
+  item        StockItem @relation(fields: [itemId], references: [id])
+  quantity    Float
+  costOfUsage Float     @default(0)
+  hotelId     String
+  usedBy      String
+  createdAt   DateTime  @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  details   String
+  userId    String
+  userName  String
+  hotelId   String
+  hotel     Hotel    @relation(fields: [hotelId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ===== PHASE 3: KILLER FEATURES =====
+
+model Recipe {
+  id           String             @id @default(cuid())
+  name         String             // e.g. "Chicken Biryani"
+  category     String             @default("Main") // Starter, Main, Dessert, Beverage
+  sellingPrice Float              @default(0) // Menu price in KES
+  servings     Int                @default(1)
+  hotelId      String
+  hotel        Hotel              @relation(fields: [hotelId], references: [id])
+  ingredients  RecipeIngredient[]
+  sales        DailySale[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model RecipeIngredient {
+  id        String    @id @default(cuid())
+  recipeId  String
+  recipe    Recipe    @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      StockItem @relation(fields: [itemId], references: [id])
+  quantity  Float     // Amount needed per serving
+}
+
+model Supplier {
+  id        String       @id @default(cuid())
+  name      String
+  phone     String?
+  location  String?
+  hotelId   String
+  hotel     Hotel        @relation(fields: [hotelId], references: [id])
+  entries   StockEntry[]
+  pos       PurchaseOrder[]
+  createdAt DateTime     @default(now())
+}
+
+model WasteLog {
+  id        String    @id @default(cuid())
+  itemId    String
+  item      StockItem @relation(fields: [itemId], references: [id])
+  quantity  Float
+  reason    String    // EXPIRED, SPOILED, OVERCOOKED, DAMAGED, OTHER
+  notes     String?
+  photoUrl  String?
+  hotelId   String
+  hotel     Hotel     @relation(fields: [hotelId], references: [id])
+  loggedBy  String
+  createdAt DateTime  @default(now())
+}
+
+// ===== PHASE 4: COMPETITIVE DOMINANCE =====
+
+model DailySale {
+  id          String   @id @default(cuid())
+  recipeId    String
+  recipe      Recipe   @relation(fields: [recipeId], references: [id])
+  quantity    Int      // Number of plates sold
+  totalRevenue Float
+  date        DateTime @default(now())
+  hotelId     String
+  hotel       Hotel    @relation(fields: [hotelId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  status      String   @default("DRAFT") // DRAFT, SENT, RECEIVED
+  totalCost   Float    @default(0)
+  hotelId     String
+  hotel       Hotel    @relation(fields: [hotelId], references: [id])
+  items       POItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model POItem {
+  id          String        @id @default(cuid())
+  poId        String
+  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        StockItem     @relation(fields: [itemId], references: [id])
+  quantity    Float
+  unitCost    Float
+}
+
+model ShiftLog {
+  id          String   @id @default(cuid())
+  shiftType   String   // MORNING, EVENING
+  staffName   String
+  notes       String?
+  cashHandover Float?
+  hotelId     String
+  hotel       Hotel    @relation(fields: [hotelId], references: [id])
+  createdAt   DateTime @default(now())
+}
